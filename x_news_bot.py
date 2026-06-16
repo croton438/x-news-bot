@@ -1,58 +1,68 @@
 import os
-import google.generativeai as genai
-import tweepy
 import requests
+import tweepy
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
 
 # --- CONFIGURATION ---
-# Replace these with your actual API keys or set them as environment variables
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE")
-X_API_KEY = os.environ.get("X_API_KEY", "YOUR_X_API_KEY_HERE")
-X_API_SECRET = os.environ.get("X_API_SECRET", "YOUR_X_API_SECRET_HERE")
-X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", "YOUR_X_ACCESS_TOKEN_HERE")
-X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", "YOUR_X_ACCESS_TOKEN_SECRET_HERE")
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "YOUR_NEWS_API_KEY_HERE")
+# Replace these with your actual X (Twitter) API keys
+# Make sure your X App has 'Read and Write' permissions and 'Web App, Android, iOS' user authentication settings enabled.
+X_API_KEY = "YOUR_X_API_KEY_HERE"
+X_API_SECRET = "YOUR_X_API_SECRET_HERE"
+X_ACCESS_TOKEN = "YOUR_X_ACCESS_TOKEN_HERE"
+X_ACCESS_TOKEN_SECRET = "YOUR_X_ACCESS_TOKEN_SECRET_HERE"
+X_BEARER_TOKEN = "YOUR_X_BEARER_TOKEN_HERE"
 
-# Configure Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
-
-def get_latest_news():
-    """Fetches the latest news using NewsAPI."""
-    url = f"https://newsapi.org/v2/top-headlines?country=us&apiKey={NEWS_API_KEY}"
-    response = requests.get(url)
-    data = response.json()
-    if data.get("status") == "ok" and data.get("articles"):
-        return data["articles"][0]["title"] + " - " + data["articles"][0]["description"]
-    return "No news found today."
-
-def summarize_with_gemini(text):
-    """Summarizes news text into a tweet-sized format using Gemini."""
-    prompt = f"Summarize the following news into a catchy tweet (under 280 characters) with relevant hashtags:\n\n{text}"
-    response = model.generate_content(prompt)
-    return response.text.strip()
-
-def post_to_x(tweet_text):
-    """Posts the summary to X (formerly Twitter)."""
-    client = tweepy.Client(
+def get_x_clients():
+    # V1.1 Client for media upload
+    auth = tweepy.OAuth1UserHandler(X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET)
+    api_v1 = tweepy.API(auth)
+    
+    # V2 Client for posting tweets
+    client_v2 = tweepy.Client(
+        bearer_token=X_BEARER_TOKEN,
         consumer_key=X_API_KEY,
         consumer_secret=X_API_SECRET,
         access_token=X_ACCESS_TOKEN,
         access_token_secret=X_ACCESS_TOKEN_SECRET
     )
+    return api_v1, client_v2
+
+@app.route('/post-tweet', methods=['POST'])
+def post_tweet():
+    data = request.json
+    tweet_text = data.get('text')
+    image_url = data.get('image_url')
+
+    if not tweet_text:
+        return jsonify({"error": "No text provided"}), 400
+
     try:
-        client.create_tweet(text=tweet_text)
-        print("Successfully posted to X!")
+        api_v1, client_v2 = get_x_clients()
+        media_ids = []
+
+        if image_url:
+            print(f"Downloading image: {image_url}")
+            img_data = requests.get(image_url).content
+            filename = 'temp_image.jpg'
+            with open(filename, 'wb') as handler:
+                handler.write(img_data)
+            
+            # Upload media using v1.1 API
+            media = api_v1.media_upload(filename=filename)
+            media_ids.append(media.media_id)
+            os.remove(filename)
+
+        # Post tweet using v2 API
+        response = client_v2.create_tweet(text=tweet_text, media_ids=media_ids if media_ids else None)
+        print(f"Successfully posted tweet: {response.data['id']}")
+        return jsonify({"status": "success", "tweet_id": response.data['id']}), 200
+
     except Exception as e:
-        print(f"Error posting to X: {e}")
+        print(f"Error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
-    print("Fetching news...")
-    news_content = get_latest_news()
-    
-    print("Summarizing with Gemini...")
-    tweet = summarize_with_gemini(news_content)
-    
-    print(f"Generated Tweet: {tweet}")
-    
-    # Uncomment the line below to actually post
-    # post_to_x(tweet)
+    # Runs on port 5000 by default
+    app.run(host='0.0.0.0', port=5000)
