@@ -2,17 +2,26 @@ import os
 import requests
 import tweepy
 from flask import Flask, request, jsonify
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
-# Replace these with your actual X (Twitter) API keys
-# Make sure your X App has 'Read and Write' permissions and 'Web App, Android, iOS' user authentication settings enabled.
-X_API_KEY = "YOUR_X_API_KEY_HERE"
-X_API_SECRET = "YOUR_X_API_SECRET_HERE"
-X_ACCESS_TOKEN = "YOUR_X_ACCESS_TOKEN_HERE"
-X_ACCESS_TOKEN_SECRET = "YOUR_X_ACCESS_TOKEN_SECRET_HERE"
-X_BEARER_TOKEN = "YOUR_X_BEARER_TOKEN_HERE"
+# The X API keys are now loaded from environment variables for security.
+# On your local machine, create a .env file with the following content:
+# X_API_KEY=your_api_key
+# X_API_SECRET=your_api_secret
+# X_ACCESS_TOKEN=your_access_token
+# X_ACCESS_TOKEN_SECRET=your_access_token_secret
+# X_BEARER_TOKEN=your_bearer_token
+X_API_KEY = os.getenv("X_API_KEY")
+X_API_SECRET = os.getenv("X_API_SECRET")
+X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
+X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
+X_BEARER_TOKEN = os.getenv("X_BEARER_TOKEN")
 
 def get_x_clients():
     # V1.1 Client for media upload
